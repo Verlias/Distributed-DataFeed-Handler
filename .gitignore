@@ -363,4 +363,4 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # config for MDFH
-.Market-Data-Feed-Handler/config.env
+Market-Data-Feed-Handler/config.env
