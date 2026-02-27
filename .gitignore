@@ -362,5 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# config for MDFH
-Market-Data-Feed-Handler/config.env
+*.env
+# MDFH
+Market-Data-Feed-Handler/build/
