@@ -1,4 +1,4 @@
-namespace Distributed_DataFeed_Handler.Server
+namespace WebApplication1
 {
     public class WeatherForecast
     {
