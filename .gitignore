@@ -365,3 +365,4 @@ FodyWeavers.xsd
 *.env
 # MDFH
 Market-Data-Feed-Handler/build/
+Market-Data-Feed-Handler/alpaca/test/
