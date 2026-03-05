@@ -30,7 +30,7 @@ namespace Distributed_DataFeed_Handler.Application
             Console.WriteLine("Hello, World!");
 
             // Path to Json File
-            string filePath = "C:\\Users\\logan\\source\\repos\\Distributed-DataFeed-Handler\\Distributed-DataFeed-Handler.Server\\Distributed-DataFeed-Handler.Application\\OrderBooks.json";
+            string filePath = "Path";
             string jsonString = File.ReadAllText(filePath);
             
             List<OrderBook> orderBooks = JsonSerializer.Deserialize<List<OrderBook>>(jsonString);
