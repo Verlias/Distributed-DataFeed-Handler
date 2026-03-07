@@ -1,14 +1,15 @@
-//var builder = WebApplication.CreateBuilder(args);
-//var app = builder.Build();
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSignalR();
+var app = builder.Build();
 
-//app.MapGet("/", () => "Hello World!");
+app.MapGet("/", () => "Hello World!");
 
-//app.Run();
+app.MapGet("/debug", () => "SignalR running");
 
-using Parser;
-// Using the Namespace of the Parser class
+//Web Socket Endpoint
+app.MapHub<ChatHub>("/chathub");  // Clients will connect to this URL
 
-Parser parser = new Parser();
-parser.Parse();
+app.Run();
+
 
 
