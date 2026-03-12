@@ -1,4 +1,4 @@
-#include "alpaca_ws.hpp"
+#include "alpaca.hpp"
 
 int main() {
 	AlpacaClient ap;

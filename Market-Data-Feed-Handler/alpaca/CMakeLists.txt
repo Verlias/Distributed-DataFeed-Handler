@@ -5,7 +5,7 @@ project(AlpacaTest)
 find_package(Boost REQUIRED COMPONENTS json)
 find_package(OpenSSL REQUIRED)
 
-add_executable(alpaca alpaca_ws.cpp)
+add_executable(alpaca alpaca.cpp)
 
 target_include_directories(alpaca PRIVATE
     ${Boost_INCLUDE_DIRS}
