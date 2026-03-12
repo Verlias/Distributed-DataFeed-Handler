@@ -366,3 +366,4 @@ FodyWeavers.xsd
 # MDFH
 Market-Data-Feed-Handler/build/
 Market-Data-Feed-Handler/alpaca/test/
+Market-Data-Feed-Handler/alpaca/build/

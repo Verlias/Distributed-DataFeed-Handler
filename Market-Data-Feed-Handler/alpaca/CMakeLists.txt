@@ -1,17 +1,18 @@
-cmake_minimum_required(VERSION 4.1.2)
+cmake_minimum_required(VERSION 3.20)
 
 project(AlpacaTest)
 
-find_package(Boost REQUIRED)
+find_package(Boost REQUIRED COMPONENTS json)
 find_package(OpenSSL REQUIRED)
 
-add_executable(alpaca alpaca.cpp)
+add_executable(alpaca alpaca_ws.cpp)
 
-target_link_directories(alpaca PRIVATE
-	${Boost_INCLUDE_DIRS}
+target_include_directories(alpaca PRIVATE
+    ${Boost_INCLUDE_DIRS}
 )
 
 target_link_libraries(alpaca
-	OpenSSL::SSL
-	OpenSSL::Crypto
+    Boost::json
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
