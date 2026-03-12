@@ -2,6 +2,8 @@
 
 int main() {
 	AlpacaClient ap;
-	ap.req_quotes(false, "AAPL");
+	ap.req_quotes(
+			true,
+			"AAPL");
 	return 0;
 }

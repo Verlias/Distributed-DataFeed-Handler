@@ -31,9 +31,16 @@ public:
 		api_sec = std::getenv("SECRET");	
 	}
 	
+	/*
+	 * Main method to request quotes
+	 * hist: bool to request historical data else request latest quotes
+	 * limit: the amount of data from historical market feed that would be pulled
+	 * */
 	void req_quotes(
 			bool hist,
-			std::string const &ticker) {
+			std::string const &ticker,
+			int months=1,
+			int limit=1000) {
 		net::io_context ioc;
 		ssl::context ctx(ssl::context::tls_client);
 		ctx.set_default_verify_paths();
@@ -58,7 +65,7 @@ public:
 		stream.handshake(ssl::stream_base::client);
 
 		auto verb = http::verb::get;
-		std::string uri = get_quotes_uri(hist, ticker);
+		std::string uri = get_quotes_uri(hist, ticker, months, limit);
 		http::request<http::string_body> req(verb, uri, 11);
 
 		req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
@@ -72,10 +79,10 @@ public:
 
 		beast::flat_buffer buff;
 
-		http::response<http::dynamic_body> res;
+		http::response<http::string_body> res;
 		http::read(stream, buff, res);
 
-		std::cout << res << std::endl;
+		std::cout << res.body() << std::endl;
 	
 		beast::error_code ec;
 		stream.shutdown(ec);
@@ -89,12 +96,15 @@ public:
 		}
 	}
 
+
 	std::string get_quotes_uri(
 			bool hist,
-			std::string const &ticker) {
+			std::string const &ticker,
+			int months=1,
+			int limit=1000) {
 		std::string uri;
 		if (hist) {
-			uri = cons_hist_quotes_uri(ticker);
+			uri = cons_hist_quotes_uri(ticker, limit, months);
 		} else {
 			uri = cons_latest_quotes_uri(ticker);
 		}
@@ -102,38 +112,46 @@ public:
 		return uri;
 	} 
 
+
+	/*
+	 * Method called to construct uri for quotes greather than or equal to a month ago  
+	 * */	
 	std::string cons_hist_quotes_uri(
 			std::string const &ticker,
-			int limit=1000,
-			bool start=false) {
+			int limit,
+			int months=1) {
 		if (limit < 1 && 10000 < limit) {
-			std::cerr << "Construction of historical quotes URI error: limit=" << limit;
+			std::cerr << "Construction of historical quotes URI error: limit=" << limit << std::endl;
 			return "";
 		}
 		
 		std::string uri = "/v2/stocks/quotes";
 		uri += "?symbols=" + ticker + "&limit=" + std::to_string(limit);
 		
-		if (start) {
-			std::time_t now = std::time(nullptr);
-			std::tm* tm = std::gmtime(&now);
-			
-			tm->tm_mon -= 1;
-			mktime(tm);
-
-			char buf[21];
-			std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", tm);
-
-			// URL-encode the colons
-			std::string time = buf;
-			size_t pos = 0;
-			while ((pos = time.find(':', pos)) != std::string::npos) {
-				time.replace(pos, 1, "%3A");
-				pos += 3;
-			}
-
-			uri += "&start=" + time;
+		std::time_t now = std::time(nullptr);
+		std::tm* tm = std::gmtime(&now);
+		
+		// Handles the years for the 
+		while (months >= 12) {
+			tm->tm_year -= 1;
+			months -= 12;
 		}
+
+		tm->tm_mon -= months;
+		mktime(tm);
+
+		char buf[21];
+		std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", tm);
+
+		// URL-encode the colons
+		std::string time = buf;
+		size_t pos = 0;
+		while ((pos = time.find(':', pos)) != std::string::npos) {
+			time.replace(pos, 1, "%3A");
+			pos += 3;
+		}
+
+		uri += "&start=" + time + "&feed=sip&sort=asc";
 
 		return uri;
 	}
