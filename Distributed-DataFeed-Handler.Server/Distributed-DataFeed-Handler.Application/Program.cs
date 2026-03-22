@@ -2,6 +2,8 @@
 using System.IO;
 using System.Text.Json;
 using System.Collections.Generic;
+using Microsoft.VisualBasic;
+using System.Diagnostics;
 
 namespace Distributed_DataFeed_Handler.Application
 {
@@ -9,6 +11,7 @@ namespace Distributed_DataFeed_Handler.Application
     public class OrderBook
     {
         // Define properties for the OrderBook Json Structure
+        public int seq { get; set;}
         public string symbol { get; set; }
         public string timestamp { get; set; }
 
@@ -23,23 +26,96 @@ namespace Distributed_DataFeed_Handler.Application
         public string s { get; set; }
     }
 
+    public class OrderBookReorderProcessor
+    {
+        private long expectedSeq = 0;
+        private SortedDictionary<long, OrderBook> buffer = 
+            new SortedDictionary<long, OrderBook>();
+
+        private OrderBook book = new OrderBook();
+
+        public void OnMessage(OrderBook msg)
+        {
+            if (expectedSeq == 0)
+            {
+                expectedSeq = msg.seq;
+            }
+
+            if (msg.seq == expectedSeq)
+            {
+                Apply(msg);
+                expectedSeq++;
+
+                // Process Buffered Messages
+                while (buffer.TryGetValue(expectedSeq, out var next))
+                {
+                    buffer.Remove(expectedSeq);
+                    Apply(next);
+                    expectedSeq++;
+                }
+            }
+            else if (msg.seq > expectedSeq)
+            {
+                //Store Later Messages in Buffer
+                buffer[msg.seq] = msg;
+            }
+            else
+            {
+                // Old Message -> Ignore
+            }
+        }
+
+        private void Apply(OrderBook msg)
+        {
+            book.seq = msg.seq;
+            book.symbol = msg.symbol;
+            book.timestamp = msg.timestamp;
+            book.bids = msg.bids;
+            book.asks = msg.asks;
+            PrintBook();
+        }
+
+        private void PrintBook()
+        {
+            Console.WriteLine($"SEQ {book.seq} {book.symbol}");
+            Console.WriteLine($"Timestamp: {book.timestamp}");
+
+            Console.WriteLine("ASKS");
+
+            foreach (var a in book.asks)
+                Console.WriteLine($"{a.p} {a.s}");
+            
+            Console.WriteLine("------");
+
+            Console.WriteLine("BIDS");
+
+            foreach (var b in book.bids)
+                Console.WriteLine($"{b.p} {b.s}");
+        }
+}
+
     class Program
     {
         static void Main(string[] args)
         {
             Console.WriteLine("Hello, World!");
-
+            var processor = new OrderBookReorderProcessor();
             // Path to Json File
             string filePath = "Path";
             string jsonString = File.ReadAllText(filePath);
             
-            List<OrderBook> orderBooks = JsonSerializer.Deserialize<List<OrderBook>>(jsonString);
-           
-            // List of OrderBook 
-            foreach (var orderBook in orderBooks)
+            // List<OrderBook> orderBooks = JsonSerializer.Deserialize<List<OrderBook>>(jsonString);
+            var messages = JsonSerializer.Deserialize<List<OrderBook>>(jsonString);
+            
+            foreach (var msg in messages)
             {
-                Console.WriteLine($"Timestamp: {orderBook.timestamp} | OrderBook: {orderBook.symbol}");
+                processor.OnMessage(msg);
             }
+            // List of OrderBook 
+            // foreach (var orderBook in orderBooks)
+            // {
+            //     Console.WriteLine($"Timestamp: {orderBook.timestamp} | OrderBook: {orderBook.symbol}");
+            // }
         }
     }
 }
