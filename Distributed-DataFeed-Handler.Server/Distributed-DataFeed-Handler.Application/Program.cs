@@ -4,9 +4,45 @@ using System.Text.Json;
 using System.Collections.Generic;
 using Microsoft.VisualBasic;
 using System.Diagnostics;
+using System.Threading.Channels;
 
 namespace Distributed_DataFeed_Handler.Application
 {
+
+    public class ProducerBackgroundService : BackgroundService
+    {
+        private readonly StreamChannelService _channelService;
+        private readonly ILogger<ProducerBackgroundService> _logger;
+
+        public ProducerBackgroundService(
+            StreamChannelService channelService,
+            ILogger<ProducerBackgroundService> logger)
+        {
+            _channelService = channelService;
+            _logger = logger;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            var writer = _channelService.Writer;
+
+            try
+            {
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    var message = $"Event at {DateTime.UtcNow:0}";
+                    await writer.WriteAsync(message, stoppingToken); // Blocks If channel is full
+                    _logger.LogInformation("Produced: {Message}", message);
+
+                    await Task.Delay(500, stoppingToken);
+                }
+            }
+            finally
+            {
+                writer.Complete(); // Signal no more items
+            }
+        }
+    }
 
     public class OrderBook
     {
