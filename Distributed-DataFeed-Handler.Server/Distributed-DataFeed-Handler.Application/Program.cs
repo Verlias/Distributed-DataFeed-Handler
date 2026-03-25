@@ -1,41 +1,109 @@
-﻿using System;
-using System.IO;
+using System.Text;
 using System.Text.Json;
-using System.Collections.Generic;
-using Microsoft.VisualBasic;
-using System.Diagnostics;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Distributed_DataFeed_Handler.Application
 {
+    public class ProducerBackgroundService : BackgroundService
+    {
+        private readonly StreamChannelService _channelService;
+        private readonly ILogger<ProducerBackgroundService> _logger;
+
+        public ProducerBackgroundService(
+            StreamChannelService channelService,
+            ILogger<ProducerBackgroundService> logger)
+        {
+            _channelService = channelService;
+            _logger = logger;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            var writer = _channelService.Writer;
+            var messages = LoadOrderBooks();
+            var processor = new OrderBookReorderProcessor();
+
+            try
+            {
+                if (messages.Count == 0)
+                {
+                    _logger.LogWarning("No order book messages were loaded. Producer is idling.");
+                    await Task.Delay(Timeout.Infinite, stoppingToken);
+                    return;
+                }
+
+                foreach (var message in messages)
+                {
+                    stoppingToken.ThrowIfCancellationRequested();
+
+                    foreach (var output in processor.OnMessage(message))
+                    {
+                        await writer.WriteAsync(output, stoppingToken);
+                        _logger.LogInformation("Produced reordered snapshot for seq {Sequence}", message.seq);
+                    }
+
+                    await Task.Delay(250, stoppingToken);
+                }
+
+                await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
+            finally
+            {
+                writer.TryComplete();
+            }
+        }
+
+        private List<OrderBook> LoadOrderBooks()
+        {
+            var candidates = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "OrderBooks.json"),
+                Path.Combine(Directory.GetCurrentDirectory(), "OrderBooks.json"),
+                Path.Combine(Directory.GetCurrentDirectory(), "Distributed-DataFeed-Handler.Application", "OrderBooks.json")
+            };
+
+            var filePath = candidates.FirstOrDefault(File.Exists);
+            if (filePath is null)
+            {
+                _logger.LogWarning("Could not find OrderBooks.json. Checked: {Candidates}", string.Join(" | ", candidates));
+                return new List<OrderBook>();
+            }
+
+            var jsonString = File.ReadAllText(filePath);
+            var messages = JsonSerializer.Deserialize<List<OrderBook>>(jsonString) ?? new List<OrderBook>();
+            _logger.LogInformation("Loaded {Count} order book messages from {Path}", messages.Count, filePath);
+
+            return messages;
+        }
+    }
 
     public class OrderBook
     {
-        // Define properties for the OrderBook Json Structure
-        public int seq { get; set;}
-        public string symbol { get; set; }
-        public string timestamp { get; set; }
-
-        // Have to Create a Order Class to accomdate for the structure of the nested Json Array for Bids and Asks
-        public List<Order> bids { get; set; }
-        public List<Order> asks { get; set; }
+        public int seq { get; set; }
+        public string symbol { get; set; } = string.Empty;
+        public string timestamp { get; set; } = string.Empty;
+        public List<Order> bids { get; set; } = new();
+        public List<Order> asks { get; set; } = new();
     }
 
     public class Order
     {
-        public string p { get; set; }
-        public string s { get; set; }
+        public string p { get; set; } = string.Empty;
+        public string s { get; set; } = string.Empty;
     }
 
     public class OrderBookReorderProcessor
     {
         private long expectedSeq = 0;
-        private SortedDictionary<long, OrderBook> buffer = 
-            new SortedDictionary<long, OrderBook>();
+        private readonly SortedDictionary<long, OrderBook> buffer = new();
 
-        private OrderBook book = new OrderBook();
+        private readonly OrderBook book = new();
 
-        public void OnMessage(OrderBook msg)
+        public List<string> OnMessage(OrderBook msg)
         {
+            var outputs = new List<string>();
+
             if (expectedSeq == 0)
             {
                 expectedSeq = msg.seq;
@@ -43,79 +111,58 @@ namespace Distributed_DataFeed_Handler.Application
 
             if (msg.seq == expectedSeq)
             {
-                Apply(msg);
+                outputs.Add(Apply(msg));
                 expectedSeq++;
 
-                // Process Buffered Messages
                 while (buffer.TryGetValue(expectedSeq, out var next))
                 {
                     buffer.Remove(expectedSeq);
-                    Apply(next);
+                    outputs.Add(Apply(next));
                     expectedSeq++;
                 }
             }
             else if (msg.seq > expectedSeq)
             {
-                //Store Later Messages in Buffer
                 buffer[msg.seq] = msg;
             }
-            else
-            {
-                // Old Message -> Ignore
-            }
+
+            return outputs;
         }
 
-        private void Apply(OrderBook msg)
+        private string Apply(OrderBook msg)
         {
             book.seq = msg.seq;
             book.symbol = msg.symbol;
             book.timestamp = msg.timestamp;
             book.bids = msg.bids;
             book.asks = msg.asks;
-            PrintBook();
+
+            return FormatBook();
         }
 
-        private void PrintBook()
+        private string FormatBook()
         {
-            Console.WriteLine($"SEQ {book.seq} {book.symbol}");
-            Console.WriteLine($"Timestamp: {book.timestamp}");
-
-            Console.WriteLine("ASKS");
+            var builder = new StringBuilder();
+            builder.AppendLine($"SEQ {book.seq} {book.symbol}");
+            builder.AppendLine($"Timestamp: {book.timestamp}");
+            builder.AppendLine("ASKS");
 
             foreach (var a in book.asks)
-                Console.WriteLine($"{a.p} {a.s}");
-            
-            Console.WriteLine("------");
+            {
+                builder.AppendLine($"{a.p} {a.s}");
+            }
 
-            Console.WriteLine("BIDS");
+            builder.AppendLine("------");
+            builder.AppendLine("BIDS");
 
             foreach (var b in book.bids)
-                Console.WriteLine($"{b.p} {b.s}");
-        }
-}
-
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            Console.WriteLine("Hello, World!");
-            var processor = new OrderBookReorderProcessor();
-            // Path to Json File
-            string filePath = "Path";
-            string jsonString = File.ReadAllText(filePath);
-            
-            // List<OrderBook> orderBooks = JsonSerializer.Deserialize<List<OrderBook>>(jsonString);
-            var messages = JsonSerializer.Deserialize<List<OrderBook>>(jsonString);
-            
-            foreach (var msg in messages)
             {
-                processor.OnMessage(msg);
+                builder.AppendLine($"{b.p} {b.s}");
             }
-            // List of OrderBook 
-            // foreach (var orderBook in orderBooks)
-            // {
-            //     Console.WriteLine($"Timestamp: {orderBook.timestamp} | OrderBook: {orderBook.symbol}");
-            // }
+
+            var snapshot = builder.ToString();
+            Console.WriteLine(snapshot);
+            return snapshot;
         }
     }
 }

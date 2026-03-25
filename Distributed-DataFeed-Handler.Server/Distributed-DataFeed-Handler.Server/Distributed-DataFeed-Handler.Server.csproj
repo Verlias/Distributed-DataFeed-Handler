@@ -11,4 +11,8 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.9" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Distributed-DataFeed-Handler.Application\Distributed-DataFeed-Handler.Application.csproj" />
+  </ItemGroup>
+
 </Project>
