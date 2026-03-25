@@ -1,5 +1,7 @@
 using System.Threading.Channels;
 
+namespace Distributed_DataFeed_Handler.Application;
+
 public class StreamChannelService
 {
     private readonly Channel<string> _channel;

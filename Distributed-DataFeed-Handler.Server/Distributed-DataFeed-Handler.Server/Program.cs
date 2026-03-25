@@ -1,9 +1,9 @@
 using System.Reflection;
+using Distributed_DataFeed_Handler.Application;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<StreamChannelService>();
 builder.Services.AddSignalR();
-// Need to properly add this
 builder.Services.AddHostedService<ProducerBackgroundService>();
 var app = builder.Build();
 
